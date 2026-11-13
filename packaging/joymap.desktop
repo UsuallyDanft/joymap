@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=Joymap
+GenericName=Mapeador de Mando
+Comment=Mapeador de mando a teclado para Linux moderno
+Exec=joymap
+Icon=joymap
+Terminal=false
+Type=Application
+Categories=Utility;Game;Settings;
+Keywords=gamepad;joystick;controller;joytokey;mapping;adwaita;
+StartupNotify=true
+StartupWMClass=joymap

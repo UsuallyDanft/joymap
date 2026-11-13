@@ -1,0 +1,55 @@
+# Maintainer: Joymap Contributors
+pkgname=joymap
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Mapeador de mando a teclado para Linux moderno, inspirado en JoyToKey"
+arch=('any')
+url="https://github.com/danft/joymap"
+license=('MIT')
+depends=(
+    'python'
+    'python-evdev'
+    'python-gobject'
+    'gtk4'
+    'libadwaita'
+)
+optdepends=(
+    'xdotool: Auto-cambio de perfil según ventana activa en X11'
+    'kdotool: Auto-cambio de perfil según ventana activa en KDE Wayland'
+)
+makedepends=(
+    'python-pip'
+    'python-wheel'
+    'python-setuptools'
+)
+install="joymap.install"
+source=()
+
+build() {
+    cd "$startdir/../.."
+    python -m pip wheel --no-deps -w dist .
+}
+
+package() {
+    cd "$startdir/../.."
+
+    # Instalar wheel de Python
+    python -m pip install --no-deps --no-warn-script-location --root="$pkgdir" dist/*.whl
+
+    # Instalar regla udev para /dev/uinput
+    install -Dm644 packaging/85-joymap-uinput.rules "$pkgdir/usr/lib/udev/rules.d/85-joymap-uinput.rules"
+
+    # Cargar modulo uinput al arrancar
+    install -d "$pkgdir/usr/lib/modules-load.d"
+    echo "uinput" > "$pkgdir/usr/lib/modules-load.d/joymap-uinput.conf"
+
+    # Instalar archivo .desktop
+    install -Dm644 packaging/joymap.desktop "$pkgdir/usr/share/applications/joymap.desktop"
+
+    # Instalar icono de aplicacion
+    install -Dm644 packaging/joymap.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/joymap.svg"
+
+    # Instalar iconos de botones y sticks
+    install -d "$pkgdir/usr/share/joymap/icons"
+    install -m644 icons/*.svg "$pkgdir/usr/share/joymap/icons/"
+}

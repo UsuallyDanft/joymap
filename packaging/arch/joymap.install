@@ -1,0 +1,22 @@
+post_install() {
+    # Cargar modulo uinput si no esta cargado
+    modprobe uinput 2>/dev/null || true
+
+    # Recargar reglas udev
+    udevadm control --reload-rules 2>/dev/null || true
+    udevadm trigger 2>/dev/null || true
+
+    echo ":: Joymap se ha instalado correctamente."
+    echo ":: Asegúrate de que tu usuario pertenece al grupo 'input':"
+    echo "::   sudo usermod -aG input \$USER"
+    echo ":: (Si acabas de añadirlo, debes cerrar sesión y volver a entrar)."
+}
+
+post_upgrade() {
+    post_install
+}
+
+post_remove() {
+    udevadm control --reload-rules 2>/dev/null || true
+    udevadm trigger 2>/dev/null || true
+}

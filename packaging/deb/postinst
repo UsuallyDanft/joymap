@@ -1,0 +1,29 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    configure)
+        # Cargar modulo uinput si esta disponible
+        modprobe uinput 2>/dev/null || true
+
+        # Recargar reglas udev
+        if command -v udevadm >/dev/null 2>&1; then
+            udevadm control --reload-rules || true
+            udevadm trigger || true
+        fi
+
+        # Actualizar base de datos de iconos y escritorio
+        if command -v update-desktop-database >/dev/null 2>&1; then
+            update-desktop-database -q /usr/share/applications || true
+        fi
+        if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+            gtk-update-icon-cache -q -t -f /usr/share/icons/hicolor || true
+        fi
+
+        echo "Joymap instalado con éxito."
+        echo "Asegúrate de que tu usuario pertenece al grupo 'input':"
+        echo "  sudo usermod -aG input \$USER"
+    ;;
+esac
+
+exit 0

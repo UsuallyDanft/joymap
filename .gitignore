@@ -1,0 +1,30 @@
+# Entornos virtuales
+.venv/
+env/
+venv/
+ENV/
+
+# Python cache y compilados
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Empaquetado y distribución
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Artefactos de makepkg (Arch Linux)
+packaging/arch/pkg/
+packaging/arch/src/
+packaging/arch/*.pkg.tar*
+
+# IDEs y editores
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store

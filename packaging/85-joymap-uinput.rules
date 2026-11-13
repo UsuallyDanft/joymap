@@ -1,0 +1,3 @@
+# Reglas udev para Joymap
+# Permite al grupo 'input' y a la sesion de usuario activa (uaccess) acceder al modulo uinput
+KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="input", MODE="0660", TAG+="uaccess", OPTIONS+="static_node=uinput"
