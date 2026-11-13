@@ -4,7 +4,7 @@ pkgver=0.1.0
 pkgrel=1
 pkgdesc="Mapeador de mando a teclado para Linux moderno, inspirado en JoyToKey"
 arch=('any')
-url="https://github.com/danft/joymap"
+url="https://github.com/UsuallyDanft/joymap"
 license=('MIT')
 depends=(
     'python'

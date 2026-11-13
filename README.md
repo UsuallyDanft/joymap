@@ -37,9 +37,11 @@ Joymap permite transformar las entradas de cualquier mando de juego (PlayStation
 
 ## 📦 Instalación
 
+> 📘 Consulta la **[Guía completa de instalación](INSTALL.md)** para instrucciones detalladas paso a paso, configuración de permisos y resolución de problemas.
+
 ### Opción A: Debian / Ubuntu / Linux Mint (`.deb`)
 
-Descarga el paquete `.deb` más reciente desde la sección de [**Releases**](https://github.com/danft/joymap/releases) y ejecuta:
+Descarga el paquete `.deb` más reciente desde la sección de [**Releases**](https://github.com/UsuallyDanft/joymap/releases) y ejecuta:
 
 ```bash
 sudo apt install ./joymap_0.1.0_all.deb
@@ -51,7 +53,7 @@ sudo apt install ./joymap_0.1.0_all.deb
 Clona el repositorio y compila con `makepkg`:
 
 ```bash
-git clone https://github.com/danft/joymap.git
+git clone https://github.com/UsuallyDanft/joymap.git
 cd joymap/packaging/arch
 makepkg -si
 ```
@@ -111,7 +113,7 @@ Si deseas colaborar o ejecutar Joymap desde el código fuente:
 
 ```bash
 # 1. Clonar el repositorio
-git clone https://github.com/danft/joymap.git
+git clone https://github.com/UsuallyDanft/joymap.git
 cd joymap
 
 # 2. Instalar dependencias del sistema (Debian/Ubuntu)
