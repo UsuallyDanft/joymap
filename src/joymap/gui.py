@@ -511,6 +511,7 @@ class MainWindow(Adw.ApplicationWindow):
             self.profile = config.load_profile_by_name(saved_names[0])
         else:
             self.profile = Profile(name="default")
+        self._saved_profile_dict = self.profile.to_dict()
 
         self.controllers = devices.list_controllers()
         self.current_controller = self.controllers[0] if self.controllers else None
@@ -647,30 +648,51 @@ class MainWindow(Adw.ApplicationWindow):
         prof_scroll.set_child(self.profiles_listbox)
         col1.append(prof_scroll)
 
-        # Barra de acciones de perfiles
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        btn_box.set_homogeneous(True)
+        # Indicador visual de cambios sin guardar
+        self.unsaved_badge = Gtk.Label(xalign=0.5)
+        self.unsaved_badge.set_margin_top(4)
+        self.unsaved_badge.set_margin_bottom(2)
+        self.unsaved_badge.set_markup("<small><span foreground='#e5a50a'><b>● Cambios sin guardar</b></span></small>")
+        self.unsaved_badge.set_visible(False)
+        col1.append(self.unsaved_badge)
 
-        save_btn = Gtk.Button(label="Guardar")
-        save_btn.set_icon_name("document-save-symbolic")
-        save_btn.set_tooltip_text("Guardar cambios del perfil actual")
-        save_btn.connect("clicked", self.on_save)
-        btn_box.append(save_btn)
+        # Fila 1: Confirmar Guardado y Descartar / Cancelar
+        save_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        save_box.set_homogeneous(True)
+
+        self.save_btn = Gtk.Button(label="Guardar")
+        self.save_btn.set_icon_name("document-save-symbolic")
+        self.save_btn.set_tooltip_text("Confirmar y guardar cambios del perfil")
+        self.save_btn.connect("clicked", self.on_save)
+        save_box.append(self.save_btn)
+
+        self.discard_btn = Gtk.Button(label="Descartar")
+        self.discard_btn.set_icon_name("edit-undo-symbolic")
+        self.discard_btn.set_tooltip_text("Cancelar las modificaciones no guardadas")
+        self.discard_btn.set_sensitive(False)
+        self.discard_btn.connect("clicked", self.on_discard)
+        save_box.append(self.discard_btn)
+
+        col1.append(save_box)
+
+        # Fila 2: Copiar perfil y Borrar perfil
+        manage_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        manage_box.set_homogeneous(True)
 
         copy_btn = Gtk.Button(label="Copiar")
         copy_btn.set_icon_name("edit-copy-symbolic")
         copy_btn.set_tooltip_text("Guardar una copia con otro nombre")
         copy_btn.connect("clicked", self.on_save_as)
-        btn_box.append(copy_btn)
+        manage_box.append(copy_btn)
 
         del_btn = Gtk.Button(label="Borrar")
         del_btn.set_icon_name("user-trash-symbolic")
         del_btn.add_css_class("destructive-action")
         del_btn.set_tooltip_text("Eliminar el perfil seleccionado")
         del_btn.connect("clicked", self.on_delete_profile)
-        btn_box.append(del_btn)
+        manage_box.append(del_btn)
 
-        col1.append(btn_box)
+        col1.append(manage_box)
 
         paned1.set_start_child(col1)
 
@@ -744,13 +766,43 @@ class MainWindow(Adw.ApplicationWindow):
         self._populate()
         self._build_editor()
         self._start_monitor()
+        self._saved_profile_dict = self.profile.to_dict()
+        self._update_dirty_ui()
 
         self.connect("close-request", self.on_close_request)
 
     def on_close_request(self, _window):
+        if self.has_unsaved_changes():
+            dialog = Adw.AlertDialog(
+                heading="Cambios sin guardar",
+                body=f"Tienes modificaciones sin guardar en el perfil '{self.profile.name}'. ¿Deseas guardarlas antes de salir?",
+            )
+            dialog.add_response("cancel", "Cancelar")
+            dialog.add_response("discard", "Salir sin guardar")
+            dialog.add_response("save", "Guardar y salir")
+            dialog.set_response_appearance("discard", Adw.ResponseAppearance.DESTRUCTIVE)
+            dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
+            dialog.set_default_response("save")
+            dialog.set_close_response("cancel")
+
+            def on_resp(_dlg, resp):
+                if resp == "save":
+                    self._do_save_profile()
+                    self._do_close()
+                elif resp == "discard":
+                    self._do_close()
+
+            dialog.connect("response", on_resp)
+            dialog.present(self)
+            return True
+
+        self._do_close()
+        return False
+
+    def _do_close(self):
         self._stop_listen()
         self._stop_monitor()
-        return False
+        self.destroy()
 
     def _setup_css(self):
         css = """
@@ -1281,6 +1333,7 @@ class MainWindow(Adw.ApplicationWindow):
     def on_deadzone_changed(self, spin, _pspec, code):
         axis_map = self.profile.axes.setdefault(code, AxisMapping())
         axis_map.deadzone = round(spin.get_value() / 100.0, 3)
+        self._update_dirty_ui()
 
     def on_mode_changed(self, combo, _pspec, target):
         idx = combo.get_selected()
@@ -1288,6 +1341,7 @@ class MainWindow(Adw.ApplicationWindow):
             self._mapping_for(target).mode = MODES[idx][0]
             self._build_editor()
             self._update_row_label(target)
+            self._update_dirty_ui()
 
     def on_auto_repeat_toggled(self, sw, _pspec, target):
         active = sw.get_active()
@@ -1297,10 +1351,12 @@ class MainWindow(Adw.ApplicationWindow):
         if hasattr(self, "_speed_row"):
             self._speed_row.set_sensitive(active)
         self._update_row_label(target)
+        self._update_dirty_ui()
 
     def on_delay_changed(self, spin, _pspec, target):
         self._mapping_for(target).repeat_delay_ms = int(round(spin.get_value() * 1000.0))
         self._update_row_label(target)
+        self._update_dirty_ui()
 
     def on_speed_changed(self, spin, _pspec, target):
         rate = max(1, int(spin.get_value()))
@@ -1309,6 +1365,7 @@ class MainWindow(Adw.ApplicationWindow):
         if hasattr(self, "_speed_row"):
             self._speed_row.set_subtitle(self._speed_desc(rate, mapping.interval_ms))
         self._update_row_label(target)
+        self._update_dirty_ui()
 
     def on_move_assignment(self, _btn, target, idx, delta):
         mapping = self._mapping_for(target)
@@ -1319,12 +1376,14 @@ class MainWindow(Adw.ApplicationWindow):
                 mapping.assignments[idx],
             )
             self._refresh_assignments_in_group(target)
+            self._update_dirty_ui()
 
     def on_add_assignment(self, _btn, target):
         def on_done(keys):
             if keys:
                 self._mapping_for(target).assignments.append(Assignment(keys=keys))
                 self._refresh_assignments_in_group(target)
+                self._update_dirty_ui()
 
         dialog = CaptureDialog(self, multiple=True, on_done=on_done)
         dialog.present()
@@ -1337,6 +1396,7 @@ class MainWindow(Adw.ApplicationWindow):
             if keys and 0 <= idx < len(mapping.assignments):
                 mapping.assignments[idx] = Assignment(keys=keys)
                 self._refresh_assignments_in_group(target)
+                self._update_dirty_ui()
 
         dialog = CaptureDialog(self, multiple=True, initial_keys=current_keys, on_done=on_done)
         dialog.present()
@@ -1344,8 +1404,26 @@ class MainWindow(Adw.ApplicationWindow):
     def on_remove_assignment(self, _btn, target, idx):
         mapping = self._mapping_for(target)
         if 0 <= idx < len(mapping.assignments):
-            del mapping.assignments[idx]
-        self._refresh_assignments_in_group(target)
+            keys_label = " + ".join(key_label(k) for k in mapping.assignments[idx].keys) or "(vacía)"
+            dialog = Adw.AlertDialog(
+                heading="¿Quitar asignación?",
+                body=f"¿Deseas quitar la asignación '{keys_label}'?",
+            )
+            dialog.add_response("cancel", "Cancelar")
+            dialog.add_response("remove", "Quitar")
+            dialog.set_response_appearance("remove", Adw.ResponseAppearance.DESTRUCTIVE)
+            dialog.set_default_response("cancel")
+            dialog.set_close_response("cancel")
+
+            def on_resp(_dlg, resp):
+                if resp == "remove":
+                    if 0 <= idx < len(mapping.assignments):
+                        del mapping.assignments[idx]
+                    self._refresh_assignments_in_group(target)
+                    self._update_dirty_ui()
+
+            dialog.connect("response", on_resp)
+            dialog.present(self)
 
     def _refresh_profiles_list(self, select_name=None):
         target_name = select_name or self.profile.name
@@ -1374,12 +1452,57 @@ class MainWindow(Adw.ApplicationWindow):
 
         self._updating_profiles_list = False
 
+    def has_unsaved_changes(self):
+        if not hasattr(self, "_saved_profile_dict") or self._saved_profile_dict is None:
+            return False
+        return self.profile.to_dict() != self._saved_profile_dict
+
+    def _update_dirty_ui(self):
+        dirty = self.has_unsaved_changes()
+        if hasattr(self, "discard_btn"):
+            self.discard_btn.set_sensitive(dirty)
+        if hasattr(self, "save_btn"):
+            if dirty:
+                self.save_btn.add_css_class("suggested-action")
+            else:
+                self.save_btn.remove_css_class("suggested-action")
+        if hasattr(self, "unsaved_badge"):
+            self.unsaved_badge.set_visible(dirty)
+
     def on_select_profile_row(self, _lb, row):
         if row is None or getattr(self, "_updating_profiles_list", False):
             return
         name = getattr(row, "profile_name", None)
         if not name or name == self.profile.name:
             return
+
+        if self.has_unsaved_changes():
+            dialog = Adw.AlertDialog(
+                heading="Cambios sin guardar",
+                body=f"Tienes cambios sin guardar en '{self.profile.name}'. ¿Deseas guardarlos antes de cambiar a '{name}'?",
+            )
+            dialog.add_response("cancel", "Cancelar")
+            dialog.add_response("discard", "Descartar y cambiar")
+            dialog.add_response("save", "Guardar y cambiar")
+            dialog.set_response_appearance("discard", Adw.ResponseAppearance.DESTRUCTIVE)
+            dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
+            dialog.set_default_response("save")
+            dialog.set_close_response("cancel")
+
+            def on_resp(_dlg, resp):
+                if resp == "save":
+                    self._do_save_profile()
+                    self._switch_to_profile(name)
+                elif resp == "discard":
+                    self._do_discard_changes()
+                    self._switch_to_profile(name)
+                else:
+                    self._refresh_profiles_list(select_name=self.profile.name)
+
+            dialog.connect("response", on_resp)
+            dialog.present(self)
+            return
+
         self._switch_to_profile(name)
 
     def _switch_to_profile(self, name):
@@ -1387,6 +1510,8 @@ class MainWindow(Adw.ApplicationWindow):
             self.profile = config.load_profile_by_name(name)
             self._populate()
             self._build_editor()
+            self._saved_profile_dict = self.profile.to_dict()
+            self._update_dirty_ui()
             if self.engine is not None:
                 self.engine.set_profile(self.profile)
             if self.mapping_switch.get_active():
@@ -1397,6 +1522,34 @@ class MainWindow(Adw.ApplicationWindow):
             self._info(f"Error cargando perfil '{name}': {err}")
 
     def on_new_profile(self, _btn):
+        if self.has_unsaved_changes():
+            dialog = Adw.AlertDialog(
+                heading="Cambios sin guardar",
+                body=f"Tienes cambios sin guardar en '{self.profile.name}'. ¿Deseas guardarlos antes de crear un nuevo perfil?",
+            )
+            dialog.add_response("cancel", "Cancelar")
+            dialog.add_response("discard", "Descartar y continuar")
+            dialog.add_response("save", "Guardar y continuar")
+            dialog.set_response_appearance("discard", Adw.ResponseAppearance.DESTRUCTIVE)
+            dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
+            dialog.set_default_response("save")
+            dialog.set_close_response("cancel")
+
+            def on_resp(_dlg, resp):
+                if resp == "save":
+                    self._do_save_profile()
+                    self._show_new_profile_dialog()
+                elif resp == "discard":
+                    self._do_discard_changes()
+                    self._show_new_profile_dialog()
+
+            dialog.connect("response", on_resp)
+            dialog.present(self)
+            return
+
+        self._show_new_profile_dialog()
+
+    def _show_new_profile_dialog(self):
         dialog = Adw.AlertDialog(heading="Nuevo perfil", body="Introduce el nombre del nuevo perfil:")
         entry = Gtk.Entry(text="nuevo_perfil")
         entry.set_margin_top(8)
@@ -1412,7 +1565,7 @@ class MainWindow(Adw.ApplicationWindow):
                 name = entry.get_text().strip()
                 if name:
                     self.profile = Profile(name=name)
-                    config.save_profile(self.profile)
+                    self._do_save_profile()
                     self._refresh_profiles_list(select_name=name)
                     self._populate()
                     self._build_editor()
@@ -1424,13 +1577,75 @@ class MainWindow(Adw.ApplicationWindow):
         dialog.connect("response", on_resp)
         dialog.present(self)
 
-    def on_save(self, _btn):
+    def on_save(self, _btn=None):
+        if not self.has_unsaved_changes():
+            self.toast_overlay.add_toast(
+                Adw.Toast(title=f"El perfil '{self.profile.name}' ya está guardado (sin cambios pendientes)")
+            )
+            return
+
+        dialog = Adw.AlertDialog(
+            heading="¿Guardar cambios?",
+            body=f"¿Deseas confirmar y guardar los cambios realizados en el perfil '{self.profile.name}'?",
+        )
+        dialog.add_response("cancel", "Cancelar")
+        dialog.add_response("save", "Confirmar y Guardar")
+        dialog.set_response_appearance("save", Adw.ResponseAppearance.SUGGESTED)
+        dialog.set_default_response("save")
+        dialog.set_close_response("cancel")
+
+        def on_resp(_dlg, resp):
+            if resp == "save":
+                self._do_save_profile()
+
+        dialog.connect("response", on_resp)
+        dialog.present(self)
+
+    def _do_save_profile(self):
         config.save_profile(self.profile)
+        self._saved_profile_dict = self.profile.to_dict()
+        self._update_dirty_ui()
         self._refresh_profiles_list(select_name=self.profile.name)
         if self.mapping_switch.get_active():
             self._update_status_active()
-        else:
-            self._info(f"Perfil '{self.profile.name}' guardado correctamente.")
+        self.toast_overlay.add_toast(
+            Adw.Toast(title=f"Perfil '{self.profile.name}' guardado correctamente")
+        )
+
+    def on_discard(self, _btn=None):
+        if not self.has_unsaved_changes():
+            self.toast_overlay.add_toast(
+                Adw.Toast(title="No hay cambios pendientes para descartar")
+            )
+            return
+
+        dialog = Adw.AlertDialog(
+            heading="¿Descartar cambios?",
+            body=f"¿Estás seguro de que deseas cancelar las modificaciones no guardadas en '{self.profile.name}'?\n\nSe restaurará la última versión guardada en disco.",
+        )
+        dialog.add_response("keep", "Continuar editando")
+        dialog.add_response("discard", "Descartar cambios")
+        dialog.set_response_appearance("discard", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("keep")
+        dialog.set_close_response("keep")
+
+        def on_resp(_dlg, resp):
+            if resp == "discard":
+                self._do_discard_changes()
+
+        dialog.connect("response", on_resp)
+        dialog.present(self)
+
+    def _do_discard_changes(self):
+        self.profile = Profile.from_dict(self._saved_profile_dict)
+        self._update_dirty_ui()
+        self._populate()
+        self._build_editor()
+        if self.engine is not None:
+            self.engine.set_profile(self.profile)
+        self.toast_overlay.add_toast(
+            Adw.Toast(title=f"Cambios cancelados en '{self.profile.name}'")
+        )
 
     def on_save_as(self, _btn):
         dialog = Adw.AlertDialog(heading="Guardar perfil como...", body="Introduce el nombre para la copia:")
@@ -1448,12 +1663,8 @@ class MainWindow(Adw.ApplicationWindow):
                 name = entry.get_text().strip()
                 if name:
                     self.profile.name = name
-                    config.save_profile(self.profile)
+                    self._do_save_profile()
                     self._refresh_profiles_list(select_name=name)
-                    if self.engine is not None:
-                        self.engine.set_profile(self.profile)
-                    if self.mapping_switch.get_active():
-                        self._update_status_active()
 
         dialog.connect("response", on_resp)
         dialog.present(self)
