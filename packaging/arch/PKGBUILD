@@ -46,7 +46,11 @@ package() {
     # Instalar archivo .desktop
     install -Dm644 packaging/joymap.desktop "$pkgdir/usr/share/applications/joymap.desktop"
 
-    # Instalar icono de aplicacion
+    # Instalar iconos de aplicacion (todas las resoluciones + svg)
+    for s in 16 32 48 64 128 256 512; do
+        install -Dm644 "packaging/icons/hicolor/${s}x${s}/apps/joymap.png" \
+            "$pkgdir/usr/share/icons/hicolor/${s}x${s}/apps/joymap.png"
+    done
     install -Dm644 packaging/joymap.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/joymap.svg"
 
     # Instalar iconos de botones y sticks

@@ -67,9 +67,11 @@ def build_deb():
         with open(os.path.join(modload_dir, "joymap-uinput.conf"), "w") as f:
             f.write("uinput\n")
 
-        # 5. Desktop y app icon
+        # 5. Desktop y app icons (todas las resoluciones + svg)
         shutil.copy(os.path.join(root_dir, "packaging", "joymap.desktop"), desktop_dir)
-        shutil.copy(os.path.join(root_dir, "packaging", "joymap.svg"), app_icon_dir)
+        icons_hicolor_src = os.path.join(root_dir, "packaging", "icons", "hicolor")
+        icons_hicolor_dst = os.path.join(tmpdir, "usr", "share", "icons", "hicolor")
+        shutil.copytree(icons_hicolor_src, icons_hicolor_dst, dirs_exist_ok=True)
 
         # 6. Iconos de botones/cruceta/sticks
         icons_src = os.path.join(root_dir, "icons")

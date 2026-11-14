@@ -498,6 +498,7 @@ class MainWindow(Adw.ApplicationWindow):
     def __init__(self, application):
         super().__init__(application=application, title="joymap")
         self.set_default_size(1120, 680)
+        self.set_icon_name("joymap")
 
         self._updating_profiles_list = False
         self.switcher = None
@@ -1994,11 +1995,11 @@ class MainWindow(Adw.ApplicationWindow):
     def on_about(self, _btn):
         about = Adw.AboutDialog(
             application_name="Joymap",
-            application_icon="input-gaming-symbolic",
+            application_icon="joymap",
             version="0.1.0",
-            developer_name="Joymap Contributors",
+            developer_name="UsuallyDanft",
             comments="Mapeador de mando a teclado para Linux moderno inspirado en JoyToKey",
-            website="https://github.com/danft/joymap",
+            website="https://github.com/UsuallyDanft/joymap",
         )
         about.present(self)
 
